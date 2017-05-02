@@ -116,10 +116,6 @@ class SMAC(object):
         # random configurations with each seed given to SMAC
         scenario.cs.seed(rng.randint(MAXINT))
 
-        # initial Trajectory Logger
-        traj_logger = TrajLogger(
-            output_dir=scenario.output_dir, stats=self.stats)
-
         # initial EPM
         types = get_types(scenario.cs, scenario.feature_array)
         if model is None:
@@ -127,6 +123,16 @@ class SMAC(object):
                                               instance_features=scenario.feature_array,
                                               seed=rng.randint(MAXINT),
                                               pca_components=scenario.PCA_DIM)
+        
+        # initial Trajectory Logger
+        if scenario.shared_model:
+            traj_logger = TrajLogger(
+                output_dir=scenario.output_dir, stats=self.stats,
+                epm=model)
+        else:
+            traj_logger = TrajLogger(
+                output_dir=scenario.output_dir, stats=self.stats)
+            
         # initial acquisition function
         if acquisition_function is None:
             if scenario.run_obj == "runtime":

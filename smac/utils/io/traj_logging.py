@@ -8,10 +8,16 @@ import logging
 import json
 import typing
 import collections
+import traceback
+
+import numpy as np
 
 from ConfigSpace.configuration_space import ConfigurationSpace, Configuration
 from ConfigSpace.hyperparameters import FloatHyperparameter, IntegerHyperparameter
 
+from smac.stats.stats import Stats
+from smac.epm.base_epm import AbstractEPM
+from smac.configspace import convert_configurations_to_array
 
 TrajEntry = collections.namedtuple(
     'TrajEntry', ['train_perf', 'incumbent_id', 'incumbent',
@@ -28,7 +34,8 @@ class TrajLogger(object):
         logger : Logger oject
     """
 
-    def __init__(self, output_dir, stats):
+    def __init__(self, output_dir:str, stats:Stats,
+                 epm:AbstractEPM=None):
         """
         Constructor 
 
@@ -38,11 +45,14 @@ class TrajLogger(object):
         ---------
         output_dir: str
             directory for logging (or None to disable logging)
-        stats: Stats()
+        stats: Stats
             Stats object
+        epm: AbstractEPM
+            if provided, use EPM to estimate the training cost through EPM-predictions 
         """
         self.stats = stats
         self.logger = logging.getLogger(self.__module__ + "." + self.__class__.__name__)
+        self.epm = epm
 
         self.output_dir = output_dir
         if output_dir is None:
@@ -86,6 +96,14 @@ class TrajLogger(object):
         ta_runs = self.stats.ta_runs
         ta_time_used = self.stats.ta_time_used
         wallclock_time = self.stats.get_used_wallclock_time()
+        
+        if self.epm:
+            try:
+                c = convert_configurations_to_array([incumbent])
+                train_perf = self.epm.predict_marginalized_over_instances(c)[0][0,0]
+            except TypeError:
+                pass # for first call of this method, EPM is not trained
+        
         self.trajectory.append(TrajEntry(train_perf, incumbent_id, incumbent,
                                 ta_runs, ta_time_used, wallclock_time))
         if self.output_dir is not None:
