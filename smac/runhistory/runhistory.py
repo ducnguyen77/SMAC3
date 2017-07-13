@@ -77,6 +77,10 @@ class RunHistory(object):
         # runs_per_config is necessary for computing the moving average
         self.runs_per_config = {}  # config_id -> number of runs
 
+        # Store whether a datapoint is "external", which means it was read from
+        # a JSON file. Can be chosen to not be written to disk
+        self.external = {}  # RunKey -> bool
+
         self.aggregate_func = aggregate_func
         self.overwrite_existing_runs = overwrite_existing_runs
 
@@ -140,6 +144,7 @@ class RunHistory(object):
             actual function to add new entry to data structures
         '''
         self.data[k] = v
+        self.external[k] = external_data
 
         if not external_data and status != StatusType.CAPPED:
             # also add to fast data structure
@@ -260,7 +265,7 @@ class RunHistory(object):
         """
         return len(self.data) == 0
 
-    def save_json(self, fn="runhistory.json"):
+    def save_json(self, fn="runhistory.json", save_external=False):
         '''
         saves runhistory on disk
 
@@ -268,15 +273,19 @@ class RunHistory(object):
         ----------
         fn : str
             file name
+        save_external : bool
+            Whether to save external data in the runhistory file.
         '''
-
-        configs = {id_: conf.get_dictionary()
-                   for id_, conf in self.ids_config.items()}
 
         data = [([int(k.config_id),
                   str(k.instance_id) if k.instance_id is not None else None,
                   int(k.seed)], list(v))
-                for k, v in self.data.items()]
+                for k, v in self.data.items()
+                if save_external or not self.external[k]]
+        configs_to_serialize = set([entry[0][0] for entry in data])
+        configs = {id_: conf.get_dictionary()
+                   for id_, conf in self.ids_config.items()
+                   if id_ in configs_to_serialize}
 
         with open(fn, "w") as fp:
             json.dump({"data": data,
@@ -326,7 +335,7 @@ class RunHistory(object):
         """
         new_runhistory = RunHistory(self.aggregate_func)
         new_runhistory.load_json(fn, cs)
-        self.update(runhistory=new_runhistory)
+        self.update(runhistory=new_runhistory, external_data=True)
 
     def update(self, runhistory, external_data: bool=False):
         """Update the current runhistory by adding new runs from a json file.

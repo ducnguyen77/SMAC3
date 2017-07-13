@@ -62,7 +62,7 @@ def read(run_history: RunHistory,
                  'runs.' % difference)
 
 
-def write(run_history:RunHistory, output_directory:str, num_run:int):
+def write(run_history:RunHistory, output_directory:str):
     """Write the runhistory to the output directory.
 
     Overwrites previously outputted runhistories.
@@ -85,5 +85,5 @@ def write(run_history:RunHistory, output_directory:str, num_run:int):
                                      delete=False) as fh:
         temporary_filename = fh.name
 
-    run_history.save_json(temporary_filename)
+    run_history.save_json(temporary_filename, save_external=False)
     os.rename(temporary_filename, output_filename)
