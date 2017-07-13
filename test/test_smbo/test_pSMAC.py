@@ -150,5 +150,5 @@ class TestPSMAC(unittest.TestCase):
         self.assertEqual(id_before, id_after)
         self.assertEqual(sorted(list(runhistory.ids_config.keys())),
                          [1, 2, 3, 4])
-        self.assertEqual(list(runhistory.external.values()),
+        self.assertEqual([runhistory.external[run_key] for run_key in runhistory.data],
                          [False, True, True, True, True, True, True])
