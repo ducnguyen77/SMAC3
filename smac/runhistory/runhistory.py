@@ -1,4 +1,5 @@
 import collections
+from enum import Enum
 import json
 import numpy as np
 import typing
@@ -37,6 +38,28 @@ class EnumEncoder(json.JSONEncoder):
         if isinstance(obj, StatusType):
             return {"__enum__": str(obj)}
         return json.JSONEncoder.default(self, obj)
+
+
+class DataOrigin(Enum):
+
+    """
+    Definition of how data in the runhistory is used.
+    
+    * ``INTERNAL``: internal data which was gathered during the current 
+      optimization run. It will be saved to disk, used for building EPMs and 
+      during intensify.
+    * ``EXTERNAL_SAME_INSTANCES``: external data, which was gathered by running
+       another program on the same instances as the current optimization run 
+       runs on (for example pSMAC). Itwill not be saved to disk, but used both 
+       for EPM building and during intensify.
+    * ``EXTERNAL_DIFFERENT_INSTANCES``: external data, which was gathered on a
+       different instance set as the one currently used, but due to having the 
+       same instance features can still provide useful information. Will not be 
+       saved to disk and only used for EPM building.
+    """
+    INTERNAL = 1
+    EXTERNAL_SAME_INSTANCES = 2
+    EXTERNAL_DIFFERENT_INSTANCES = 3
 
 
 class RunHistory(object):
@@ -88,7 +111,7 @@ class RunHistory(object):
             status, instance_id=None,
             seed=None,
             additional_info=None,
-            external_data: bool=False):
+            origin: DataOrigin=DataOrigin.INTERNAL):
         '''
         adds a data of a new target algorithm (TA) run;
         it will update data if the same key values are used
@@ -111,11 +134,8 @@ class RunHistory(object):
             additional_info: dict
                 additional run infos (could include further returned
                 information from TA or fields such as start time and host_id)
-            external_data: bool
-                if True, run will not be added to self._configid_to_inst_seed
-                and not available through get_runs_for_config();
-                essentially, intensification will not see this run,
-                but the EPM still gets it
+            origin: DataOrigin
+                Defines how data will be used.
         '''
 
         config_id = self.config_ids.get(config)
@@ -131,22 +151,23 @@ class RunHistory(object):
         # Each runkey is supposed to be used only once. Repeated tries to add
         # the same runkey will be ignored silently if not capped.
         if self.overwrite_existing_runs or self.data.get(k) is None:
-            self._add(k, v, status, external_data)
+            self._add(k, v, status, origin)
         elif status != StatusType.CAPPED and self.data[k].status == StatusType.CAPPED:
             # overwrite capped runs with uncapped runs
-            self._add(k, v, status, external_data)
+            self._add(k, v, status, origin)
         elif status == StatusType.CAPPED and self.data[k].status == StatusType.CAPPED and cost > self.data[k].cost:
             # overwrite if censored with a larger cutoff
-            self._add(k, v, status, external_data)
+            self._add(k, v, status, origin)
 
-    def _add(self, k, v, status, external_data):
+    def _add(self, k, v, status, origin):
         '''
             actual function to add new entry to data structures
         '''
         self.data[k] = v
-        self.external[k] = external_data
+        self.external[k] = origin
 
-        if not external_data and status != StatusType.CAPPED:
+        if origin in (DataOrigin.INTERNAL, DataOrigin.EXTERNAL_SAME_INSTANCES) \
+                and status != StatusType.CAPPED:
             # also add to fast data structure
             is_k = InstSeedKey(k.instance_id, k.seed)
             self._configid_to_inst_seed[
@@ -281,11 +302,11 @@ class RunHistory(object):
                   str(k.instance_id) if k.instance_id is not None else None,
                   int(k.seed)], list(v))
                 for k, v in self.data.items()
-                if save_external or not self.external[k]]
-        configs_to_serialize = set([entry[0][0] for entry in data])
+                if save_external or self.external[k] == DataOrigin.INTERNAL]
+        config_ids_to_serialize = set([entry[0][0] for entry in data])
         configs = {id_: conf.get_dictionary()
                    for id_, conf in self.ids_config.items()
-                   if id_ in configs_to_serialize}
+                   if id_ in config_ids_to_serialize}
 
         with open(fn, "w") as fp:
             json.dump({"data": data,
@@ -335,18 +356,19 @@ class RunHistory(object):
         """
         new_runhistory = RunHistory(self.aggregate_func)
         new_runhistory.load_json(fn, cs)
-        self.update(runhistory=new_runhistory, external_data=True)
+        self.update(runhistory=new_runhistory, origin=DataOrigin.EXTERNAL_SAME_INSTANCES)
 
-    def update(self, runhistory, external_data: bool=False):
+    def update(self, runhistory, origin: DataOrigin=DataOrigin.EXTERNAL_SAME_INSTANCES):
         """Update the current runhistory by adding new runs from a json file.
 
         Parameters
         ----------
         runhistory: RunHistory
             runhistory with additional data to be added to self
-        external_data: bool
-            if True, run will not be added to self._configid_to_inst_seed
-            and not available through get_runs_for_config()
+        origin: DataOrigin
+            If set to ``INTERNAL`` or ``EXTERNAL_FULL`` the data will be 
+            added to the internal data structure self._configid_to_inst_seed
+            and be available :meth:`through get_runs_for_config`.
         """
 
         # Configurations might be already known, but by a different ID. This
@@ -360,4 +382,4 @@ class RunHistory(object):
             self.add(config=config, cost=cost, time=time,
                      status=status, instance_id=instance_id,
                      seed=seed, additional_info=additional_info,
-                     external_data=external_data)
+                     origin=origin)

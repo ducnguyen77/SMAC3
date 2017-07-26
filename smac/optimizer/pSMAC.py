@@ -62,20 +62,17 @@ def read(run_history: RunHistory,
                  'runs.' % difference)
 
 
-def write(run_history:RunHistory, output_directory:str):
+def write(run_history: RunHistory, output_directory: str):
     """Write the runhistory to the output directory.
 
     Overwrites previously outputted runhistories.
 
     Parameters
     ----------
-    run_history : smac.runhistory.RunHistory
+    run_history : ~smac.runhistory.runhistory.RunHistory
         RunHistory object to be saved.
 
     output_directory : str
-
-    run_run : int
-        ID of the current SMAC run.
 
     """
 

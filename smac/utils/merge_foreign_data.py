@@ -89,7 +89,7 @@ def merge_foreign_data(scenario: Scenario,
 
     # extend runhistory
     for rh in in_runhistory_list:
-        runhistory.update(rh, external_data=True)
+        runhistory.update(rh, origin=DataOrigin.EXTERNAL_DIFFERENT_INSTANCES)
 
     for date in runhistory.data:
         if scenario.feature_dict.get(date.instance_id) is None:

@@ -3,7 +3,7 @@ import os
 import shutil
 import unittest
 
-from smac.runhistory.runhistory import RunHistory, RunKey
+from smac.runhistory.runhistory import RunHistory, RunKey, DataOrigin
 from smac.utils import test_helpers
 from smac.tae.execute_ta_run import StatusType
 from smac.optimizer import pSMAC
@@ -72,7 +72,7 @@ class TestPSMAC(unittest.TestCase):
         # External configuration which will not be written to json file!
         config_5 = configuration_space.sample_configuration()
         run_history.add(config_5, 1, 1, StatusType.SUCCESS, seed=1,
-                        external_data=True)
+                        origin=DataOrigin.EXTERNAL_SAME_INSTANCES)
 
         pSMAC.write(run_history, self.tmp_dir)
 
@@ -82,7 +82,6 @@ class TestPSMAC(unittest.TestCase):
         fixture = json.loads(fixture, object_hook=StatusType.enum_hook)
         with open(output_filename) as fh:
             output = json.load(fh, object_hook=StatusType.enum_hook)
-
         self.assertEqual(output, fixture)
 
     def test_load(self):
@@ -151,4 +150,4 @@ class TestPSMAC(unittest.TestCase):
         self.assertEqual(sorted(list(runhistory.ids_config.keys())),
                          [1, 2, 3, 4])
         self.assertEqual([runhistory.external[run_key] for run_key in runhistory.data],
-                         [False, True, True, True, True, True, True])
+                         [DataOrigin.INTERNAL] + [DataOrigin.EXTERNAL_SAME_INSTANCES] * 6)
